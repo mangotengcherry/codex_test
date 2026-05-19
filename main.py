@@ -92,11 +92,12 @@ def print_result(result: PWIResult | None, message: str, label: str = "") -> Non
         return
 
     print(
-        f"{prefix}✓  window=[{result.window_low:.3f}, {result.window_high:.3f}]"
-        f"  PWI={result.pwi_index:.1f}%"
-        f"  p={result.p_value:.4f}"
-        f"  {'normal' if result.is_normal else 'non-normal'}"
-        f"  good={result.good_groups}"
+        f"{prefix}✓  window=[{result.window_low:.3f}±{result.window_low_std:.3f},"
+        f" {result.window_high:.3f}±{result.window_high_std:.3f}]"
+        f"  PWI={result.pwi_index:.1f}% (95% CI [{result.pwi_ci_low:.1f}, {result.pwi_ci_high:.1f}])"
+        f"  R²={result.r2:.4f}"
+        f"  depth={result.window_depth:.3f}"
+        f"  y_target={result.y_target:.4f}"
     )
 
 
@@ -124,7 +125,6 @@ def print_parallel_summary(results: list[dict]) -> None:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="PWI Analysis demo")
     parser.add_argument("--parallel", action="store_true", help="Run parallel multi-key analysis")
-    parser.add_argument("--n",        type=int, default=10,  help="Number of groups (default: 10)")
     parser.add_argument("--samples",  type=int, default=800, help="Rows per key (default: 800)")
     parser.add_argument("--keys",     type=int, default=3,   help="Number of m_key2 values (default: 3)")
     parser.add_argument("--bins",     type=int, default=2,   help="Number of bin_id values (default: 2)")
@@ -138,7 +138,7 @@ def run_single(metro: pd.DataFrame, eds: pd.DataFrame, cfg: AnalysisConfig) -> N
 
     print("\n── Single analysis ──────────────────────────────────────")
     print(f"  metro rows : {len(m):,}  |  eds rows : {len(e):,}")
-    print(f"  n_groups   : {cfg.n_groups}  |  conf_level : {cfg.conf_level}")
+    print(f"  conf_level : {cfg.conf_level}  |  y_target_sigma_factor : {cfg.y_target_sigma_factor}")
 
     result, message = pwi_analysis(m, e, cfg)
     print_result(result, message)
@@ -156,7 +156,7 @@ def run_parallel(metro: pd.DataFrame, eds: pd.DataFrame, cfg: AnalysisConfig) ->
 def main() -> None:
     args = parse_args()
 
-    cfg = AnalysisConfig(n_groups=args.n)
+    cfg = AnalysisConfig()
 
     print("Generating demo data …")
     metro, eds = make_demo_data(

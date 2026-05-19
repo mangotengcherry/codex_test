@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-import pytest
 
 from pwi_analysis.config import AnalysisConfig
 from pwi_analysis.pipeline import PWIResult, pwi_analysis
@@ -19,13 +18,16 @@ def test_result_fields_are_valid(sample_data, cfg):
     assert result is not None
     assert result.window_low < result.window_high
     assert 0.0 <= result.pwi_index <= 100.0
-    assert 0.0 <= result.p_value <= 1.0
-    assert isinstance(result.good_groups, list)
-    assert isinstance(result.bad_groups, list)
+    assert result.pwi_ci_low <= result.pwi_index <= result.pwi_ci_high
+    assert result.window_low_std >= 0.0
+    assert result.window_high_std >= 0.0
+    assert 0.0 <= result.r2 <= 1.0
+    assert isinstance(result.y_target, float)
+    assert result.window_depth > 0.0
 
 
-def test_no_significant_difference_returns_none(cfg):
-    """All groups have identical distributions → ANOVA/Kruskal p >= 0.05."""
+def test_no_window_returns_none_for_flat_data(cfg):
+    """Completely flat bin_value → GPR sees no relationship → no window."""
     rng = np.random.default_rng(99)
     n = 300
     lot_ids = rng.integers(100, 115, n)
@@ -40,19 +42,19 @@ def test_no_significant_difference_returns_none(cfg):
             "m_key2": "KEY_001",
         }
     )
-    # bin_value completely uncorrelated → no group difference
+    # bin_value is constant with tiny noise → no U-shape → no window
     eds = pd.DataFrame(
         {
             "root_lot_id": lot_ids,
             "wafer_id": wafer_ids,
-            "bin_value": rng.normal(1.0, 0.01, n),
+            "bin_value": rng.normal(1.0, 0.001, n),
             "bin_id": "BIN_001",
         }
     )
 
     result, msg = pwi_analysis(metro, eds, cfg)
     assert result is None
-    assert "No significant difference" in msg
+    assert "No process window found" in msg
 
 
 def test_empty_data_returns_none(cfg):
@@ -60,7 +62,7 @@ def test_empty_data_returns_none(cfg):
     eds = pd.DataFrame(columns=["root_lot_id", "wafer_id", "bin_value", "bin_id"])
     result, msg = pwi_analysis(metro, eds, cfg)
     assert result is None
-    assert msg  # some error message
+    assert msg
 
 
 def test_missing_column_returns_none(sample_data, cfg):
@@ -70,15 +72,7 @@ def test_missing_column_returns_none(sample_data, cfg):
     assert "missing columns" in msg
 
 
-def test_good_bad_groups_disjoint(sample_data, cfg):
-    metro, eds = sample_data
-    result, _ = pwi_analysis(metro, eds, cfg)
-    if result:
-        assert set(result.good_groups) & set(result.bad_groups) == set()
-
-
 def test_default_config_used_when_none(sample_data):
     metro, eds = sample_data
     result, msg = pwi_analysis(metro, eds, cfg=None)
-    # Should not raise; may succeed or exit early depending on data
     assert isinstance(msg, str)

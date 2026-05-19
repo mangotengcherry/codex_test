@@ -11,7 +11,11 @@ def preprocess(
     eds_data: pd.DataFrame,
     cfg: AnalysisConfig,
 ) -> pd.DataFrame:
-    """Merge metro and EDS data, then remove outliers from both axes.
+    """Merge metro and EDS data, then remove per-axis quantile outliers.
+
+    Conservative quantile cuts are used rather than joint outlier detection
+    because extreme item_value points with high bin_value are meaningful signal
+    (the U-shape tails), not outliers.
 
     Returns the cleaned DataFrame. Raises ValueError when the result is empty.
     """
@@ -29,7 +33,7 @@ def preprocess(
 
     df = merged[
         merged["item_value"].between(q_metro_lo, q_metro_hi, inclusive="both")
-        & (merged["bin_value"] < q_eds_hi)  # strict upper cut for EDS top 0.05%
+        & (merged["bin_value"] < q_eds_hi)
     ].copy().reset_index(drop=True)
 
     if df.empty:
